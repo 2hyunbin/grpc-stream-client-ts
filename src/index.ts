@@ -4,7 +4,6 @@ import {
   subticksToPrice,
 } from "./market_info";
 import * as process from "node:process";
-import * as grpc from "@grpc/grpc-js";
 import WebSocket from "ws";
 import {
   StreamOrderbookUpdatesRequest,
@@ -14,6 +13,7 @@ import { Fill } from "./fills";
 import { StreamSubaccount } from "./subaccounts";
 import { LimitOrderBook } from "./book";
 import { FeedHandler, StandardFeedHandler } from "./feed_handler";
+import { createRPCQueryClient } from "@dydxprotocol/v4-proto/src/codegen/dydxprotocol/rpc.query";
 
 require("dotenv").config();
 
@@ -66,18 +66,24 @@ async function main() {
 
   if (process.env.USE_GRPC === "true") {
     const grpcPort = process.env.GRPC_PORT;
-    const grpcAddr = `${host}:${grpcPort}`;
+    const grpcAddr = `${host}:${26657}`;
 
     // Load gRPC connection and start listening
-    const channel = new grpc.Client(
-      grpcAddr,
-      grpc.credentials.createInsecure(),
-    );
+    const client = (
+      await createRPCQueryClient({
+        rpcEndpoint: grpcAddr,
+      })
+    ).dydxprotocol.clob;
+
+    await client.streamOrderbookUpdates({
+      clobPairId: [0],
+      subaccountIds: [{ owner: "123", number: 1 }],
+    });
     const interval = Number(process.env.INTERVAL_MS || "1000");
 
     const tasks = [
       listenToGrpcStream(
-        channel,
+        client,
         cpids,
         subaccountIds,
         cpidToMarketInfo,
@@ -139,7 +145,7 @@ async function main() {
 }
 
 async function listenToGrpcStream(
-  client: grpc.Client,
+  client: any,
   clobPairIds: number[],
   subaccountIds: string[],
   cpidToMarketInfo: Record<number, any>,
@@ -156,34 +162,36 @@ async function listenToGrpcStream(
       subaccountIds: subaccountProtos,
     };
 
-    const call = client.makeServerStreamRequest(
-      "StreamOrderbookUpdates", // RPC method name
-      (arg) => Buffer.from(JSON.stringify(arg)), // Serialize request
-      (buffer) => JSON.parse(buffer.toString()), // Deserialize response
-      request,
-    );
+    console.log(request);
 
-    call.on("data", (response: StreamOrderbookUpdatesResponse) => {
-      try {
-        const fillEvents = feedHandler.handle(response);
-        if (process.env.PRINT_FILLS === "true") {
-          printFills(fillEvents, cpidToMarketInfo);
-        }
-        if (process.env.PRINT_ACCOUNTS === "true") {
-          printSubaccounts(feedHandler.getRecentSubaccountUpdates());
-        }
-      } catch (error) {
-        throw new Error(`Error handling message: ${JSON.stringify(error)}`);
-      }
-    });
+    const responses = await client.streamOrderbookUpdates(request);
 
-    call.on("error", (error: grpc.ServiceError) => {
-      throw new Error(`gRPC error occurred: ${error.code} - ${error.details}`);
-    });
+    console.log(responses);
+    for await (const response of responses) {
+      console.log(response);
+    }
 
-    call.on("end", () => {
-      console.log("gRPC stream ended");
-    });
+    //   .call.on("data", (response: StreamOrderbookUpdatesResponse) => {
+    //     try {
+    //       const fillEvents = feedHandler.handle(response);
+    //       if (process.env.PRINT_FILLS === "true") {
+    //         printFills(fillEvents, cpidToMarketInfo);
+    //       }
+    //       if (process.env.PRINT_ACCOUNTS === "true") {
+    //         printSubaccounts(feedHandler.getRecentSubaccountUpdates());
+    //       }
+    //     } catch (error) {
+    //       throw new Error(`Error handling message: ${JSON.stringify(error)}`);
+    //     }
+    //   });
+    //
+    // call.on("error", (error: grpc.ServiceError) => {
+    //   throw new Error(`gRPC error occurred: ${error.code} - ${error.details}`);
+    // });
+    //
+    // call.on("end", () => {
+    //   console.log("gRPC stream ended");
+    // });
   } catch (error) {
     throw new Error(`Unexpected error in gRPC stream: ${error}`);
   }

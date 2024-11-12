@@ -11,7 +11,7 @@ You first need a full node with [gRPC streaming enabled](https://docs.dydx.excha
    INDEXER_API=https://indexer.dydx.trade
    FULL_NODE_HOST=
 
-   CLOB_PAIR_IDS=
+   CLOB_PAIR_IDS=0 1
    SUBACCOUNT_IDS=
 
    USE_GRPC= true or empty
