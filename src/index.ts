@@ -14,6 +14,7 @@ import { StreamSubaccount } from "./subaccounts";
 import { LimitOrderBook } from "./book";
 import { FeedHandler, StandardFeedHandler } from "./feed_handler";
 import { createRPCQueryClient } from "@dydxprotocol/v4-proto/src/codegen/dydxprotocol/rpc.query";
+import * as path from "node:path";
 
 require("dotenv").config();
 
@@ -65,6 +66,10 @@ async function main() {
   let feedHandler: FeedHandler = new StandardFeedHandler();
 
   if (process.env.USE_GRPC === "true") {
+    const grpc = require("@grpc/grpc-js");
+    const protoLoader = require("@grpc/proto-loader"); // protoLoader 임포트
+    const path = require("path");
+
     const grpcPort = process.env.GRPC_PORT;
     const grpcAddr = `${host}:${26657}`;
 
@@ -75,9 +80,11 @@ async function main() {
       })
     ).dydxprotocol.clob;
 
+    // console.log(await client.clobPair({ id:  }));
+
     await client.streamOrderbookUpdates({
       clobPairId: [0],
-      subaccountIds: [{ owner: "123", number: 1 }],
+      subaccountIds: [{ owner: "1", number: 0 }],
     });
     const interval = Number(process.env.INTERVAL_MS || "1000");
 
